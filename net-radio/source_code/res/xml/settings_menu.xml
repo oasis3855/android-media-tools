@@ -13,5 +13,6 @@
     <CheckBoxPreference
         android:key="pref_disp_uri"
         android:title="URIを画面表示する" />
+    <CheckBoxPreference android:key="pref_timer_quit" android:title="タイマーでプログラム終了"/>
 
 </PreferenceScreen>

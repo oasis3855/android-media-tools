@@ -4,6 +4,8 @@
     (C) 2015 INOUE Hirokazu
    
     Version 1.0 (2015/02/03)
+    Version 1.1 (2015/10/12)
+    Version 1.2 (2015/10/25)
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -28,7 +30,9 @@ import java.util.ArrayList;
 import java.util.Locale;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
@@ -55,6 +59,9 @@ import android.widget.Toast;
 import android.os.Build;
 import android.preference.PreferenceManager;
 
+/**
+ * MainAtivity
+ */
 public class MainActivity extends ActionBarActivity implements OnClickListener, OnCompletionListener,
 OnErrorListener, OnInfoListener, Runnable {
 
@@ -79,12 +86,19 @@ OnErrorListener, OnInfoListener, Runnable {
     private volatile boolean flag_pref_disp_time = false;
     private volatile long elapsed_time = System.currentTimeMillis()/1000L;
     private volatile boolean flag_disp_elapsed_time = false;
+    // 停止タイマー
+    private volatile boolean flag_timer = false;
+    private volatile long timer_stop_time = 0;
+    private volatile boolean flag_timer_quit = false;
 
 
+    /** 
+     * Called when the activity is starting
+     * @see android.support.v7.app.ActionBarActivity#onCreate(android.os.Bundle)
+     */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        
         if(get_pls_filename_from_preference() != null){
             // TitleとUriリストを一旦クリアする
             array_title.clear();
@@ -107,7 +121,13 @@ OnErrorListener, OnInfoListener, Runnable {
         thread.start();
     }
 
-    // Intentの結果を受け取る
+    /**
+     * Intentの結果を受け取る
+     * @param requestCode   identify who this result came from
+     * @param resultCode    returned by the child activity through its setResult()
+     * @param data          return result data to the caller
+     * @see android.support.v4.app.FragmentActivity#onActivityResult(int, int, android.content.Intent)
+     */
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data){
         // ファイル選択の結果を受け、PLSファイルを読み込んでTitleとUriをリストに格納する
@@ -132,15 +152,23 @@ OnErrorListener, OnInfoListener, Runnable {
         }
     }
 
-    // PLS（プレイリスト）ファイルの読み込み
+    /**
+     * PLS（プレイリスト）ファイルの読み込み
+     */
     private void read_playlist_file(){
         // PLS（プレイリスト）形式ファイルの読み込み
         Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+//        intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("file/*");
         startActivityForResult(intent, REQUEST_PLS_FILE_READ);
     }
 
-    //  PLS（プレイリスト）形式のファイルを読み込み、TitleとUriのリストに格納する
+    /**
+     * PLS（プレイリスト）形式のファイルを読み込み、TitleとUriのリストに格納する
+     * @param strPlsFilename    PLSファイルのフルパス（参照のみ）
+     * @param array_title       放送局名を格納する配列（書き込みのみ）
+     * @param array_uri         URIを格納する配列（書き込みのみ）
+     */
     private static void parse_pls_file(String strPlsFilename, ArrayList<String> array_title, ArrayList<String> array_uri){
         String str_title = "", str_uri = "";
         Boolean flag_detect_header = false;
@@ -171,10 +199,14 @@ OnErrorListener, OnInfoListener, Runnable {
             }
             reader.close();
             file_input_stream.close();
-        } catch(Exception e){ }
+        } catch(Exception e){
+//            e.printStackTrace();
+        }
     }
 
-    // 画面の構築と表示
+    /**
+     * 画面の構築と表示
+     */
     private void disp_main_screen(){
       LinearLayout layout = new LinearLayout(this);
       layout.setOrientation(LinearLayout.VERTICAL);
@@ -219,7 +251,11 @@ OnErrorListener, OnInfoListener, Runnable {
       layout.addView(text_uri);
     }
 
-    // ラジオ局選択Spinnerを、与えられたTitleリストで更新する
+    /**
+     * ラジオ局選択Spinnerを、与えられたTitleリストで更新する
+     * @param spinner       画面上の放送局選択のスピナー（コントロールに値をセット）
+     * @param arr           放送局名を格納した配列（参照のみ）
+     */
     private void disp_update_spinner_stations(Spinner spinner, ArrayList<String> arr){
         // TitleリストをArrayAdapterにセットする
         ArrayAdapter<String> array_adapter = new ArrayAdapter<String>(this,
@@ -231,19 +267,31 @@ OnErrorListener, OnInfoListener, Runnable {
         spinner.setAdapter(array_adapter);
     }
 
-    // PLSファイル名をpreferenceに保存し、読み出す処理
+    /**
+     * PLSファイル名をpreferenceに保存する処理
+     * @param pls_filename      PLSファイルのフルパス（参照のみ）
+     */
     private void save_preference(String pls_filename){
         SharedPreferences pref = getSharedPreferences("pref", Context.MODE_PRIVATE);
         SharedPreferences.Editor editor = pref.edit();
         editor.putString("PlsFilename", pls_filename);
         editor.commit();
     }
+
+    /**
+     * PLSファイル名をpreferenceから読み出す処理
+     * @return      PLSファイルのフルパス
+     */
     private String get_pls_filename_from_preference(){
         SharedPreferences pref = getSharedPreferences("pref", Context.MODE_PRIVATE);
         return pref.getString("PlsFilename", null);
     }
 
-    // 画面タップの割込
+    /**
+     * 画面タップの割込  Called when a view has been clicked
+     * @see android.view.View.OnClickListener#onClick(android.view.View)
+     * @param v     The view that was clicked
+     */
     @Override
     public void onClick(View v) {
         // 再生・停止ボタンが押された時の処理
@@ -273,7 +321,9 @@ OnErrorListener, OnInfoListener, Runnable {
         }
     }
 
-    // ネットラジオの受信開始処理
+    /**
+     * ネットラジオの受信開始処理
+     */
     private void mediaplayer_start(){
         Toast.makeText(MainActivity.this, "接続中 ...", Toast.LENGTH_LONG).show();
         // スレッドで利用する経過時間表示フラグをプリファレンスから読み込む
@@ -309,7 +359,10 @@ OnErrorListener, OnInfoListener, Runnable {
         }
     }
 
-    // 時刻表示スレッドのメインループ
+    /**
+     * 時刻表示スレッドのメインループ  be called in that separately executing thread
+     * @see java.lang.Runnable#run()
+     */
     public void run() {
         while (!flag_thread_stop) {
             // 500 ミリ秒待機
@@ -324,17 +377,51 @@ OnErrorListener, OnInfoListener, Runnable {
                 handler.post(new Runnable() {
                     @Override
                     public void run() {
-                        // 現在時刻の表示
+                        // 現在時刻
                         int min = (int) ((System.currentTimeMillis()/1000L - elapsed_time) / 60L);
                         int sec = (int) ((System.currentTimeMillis()/1000L - elapsed_time) % 60L);
-                        text_time.setText(String.format("%02d:%02d", min, sec));
+                        // タイマーが働いている場合の処理
+                        if(flag_timer){
+                            int remain = (int) (timer_stop_time - System.currentTimeMillis()/1000L);
+                            // タイマー時間が経過・完了した場合
+                            if(remain < 0){
+                                flag_timer = false;
+                                // メディアプレーヤが演奏中の場合は停止する
+                                if(media_player.isPlaying()){
+                                    try{
+                                        media_player.stop();
+                                    } catch (Exception e) {
+                                    }
+                                }
+                                // 表示を更新
+                                flag_disp_elapsed_time = false;
+                                text.setText("");
+                                text_time.setText("タイマーで停止しました");
+                                text_uri.setText("");
+                                button_play.setText("受信");
+                                // タイマー経過後プログラム終了
+                                if(flag_timer_quit){
+                                    quit_program();
+                                }
+                            }
+                            // タイマーの残り時間と、再生開始からの経過時間を表示する
+                            else {
+                                text_time.setText(String.format("%02d:%02d (残り%d分%02d秒)", min, sec, remain/60, remain%60));
+                            }
+                        }
+                        // タイマーが働いていない場合は、再生開始からの経過時間を表示
+                        else{
+                            text_time.setText(String.format("%02d:%02d", min, sec));
+                        }
                     }
                 });
             }
         }
     }
 
-    // 時刻表示スレッドの停止
+    /**
+     * 時刻表示スレッドの停止
+     */
     private void stop_thread(){
         if(thread.isAlive()) 
         {
@@ -344,7 +431,61 @@ OnErrorListener, OnInfoListener, Runnable {
             catch(InterruptedException e) { }
         }
     }
+
+    /**
+     * プログラムを終了する（再生停止、スレッド破棄含む）
+     */
+    private void quit_program(){
+        // メディアプレーヤが演奏中の場合は停止する
+        if(media_player.isPlaying()){
+            try{
+                media_player.stop();
+            } catch (Exception e) {
+            }
+        }
+        // 時刻表示・タイマー スレッドの停止
+        stop_thread();
+        // 自身のプロセスを停止する
+        this.finish();  // プログラムが全面で画面sleepの場合、プログラムが再起動するのを防ぐ
+        android.os.Process.killProcess(android.os.Process.myPid());
+        System.exit(1); // killProcessで終了しているため、この行には到達しない
+    }
+
+    /**
+     * メニューから呼びだされるタイマー設定のAlertDialog
+     */
+    private void set_timer() {
+        // 選択肢リストを作成する
+        final String[] items = new String[12];
+        for(int i=0; i<12; i++) {
+            items[i] = String.format("%d 分後", (i+1)*5);
+        }
+        // AlertDialogを構築する
+        final AlertDialog.Builder dlg = new AlertDialog.Builder(MainActivity.this);
+        dlg.setTitle("リストのAlertDialog");
+        dlg.setItems(items, new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int idx) {
+                Toast.makeText(MainActivity.this, String.format("%s に受信停止", items[idx]), Toast.LENGTH_LONG).show();
+                // タイマーのセット
+                flag_timer = true;
+                timer_stop_time = System.currentTimeMillis()/1000L + (idx + 1) * 5 * 60;
+            }
+        });
+        dlg.setNegativeButton("キャンセル", null);
+        // AlertDialogを表示する
+        dlg.show();
+        
+        // タイマー経過後、プログラムを終了するかの設定をPreferenceより読み込む
+        SharedPreferences pref = PreferenceManager.getDefaultSharedPreferences(this);
+        flag_timer_quit = pref.getBoolean("pref_timer_quit", false);
+    }
     
+    /**
+     * Initialize the contents of the Activity's standard options menu
+     * @see android.app.Activity#onCreateOptionsMenu(android.view.Menu)
+     * @param menu      The options menu in which you place your items
+     */
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
 
@@ -353,7 +494,11 @@ OnErrorListener, OnInfoListener, Runnable {
         return true;
     }
 
-    // メニュー選択による分岐
+    /**
+     * メニュー選択による分岐  This hook is called whenever an item in your options menu is selected
+     * @see android.app.Activity#onOptionsItemSelected(android.view.MenuItem)
+     * @param item      The menu item that was selected
+     */
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         // Handle action bar item clicks here. The action bar will
@@ -362,18 +507,7 @@ OnErrorListener, OnInfoListener, Runnable {
         int id = item.getItemId();
         // 終了メニューが選択された場合
         if (id == R.id.menu_exit) {
-            // メディアプレーヤが演奏中の場合は停止する
-            if(media_player.isPlaying()){
-                try{
-                    media_player.stop();
-                } catch (Exception e) {
-                }
-            }
-            // 時刻表示スレッドの停止
-            stop_thread();
-            // 自身のプロセスを停止する
-            android.os.Process.killProcess(android.os.Process.myPid());
-            System.exit(1);
+            quit_program();
             return true;
         }
         // Playlistファイルの読込が選択された場合
@@ -388,10 +522,26 @@ OnErrorListener, OnInfoListener, Runnable {
             startActivityForResult(intent, REQUEST_PREF_MENU);
             return true;
         }
+        // タイマーが選択された場合
+        else if(id == R.id.menu_timer){
+            // タイマー未起動の場合、設定ダイアログを表示
+            if(!flag_timer){
+                set_timer();
+            }
+            // タイマー起動中の場合、無効化する
+            else{
+                flag_timer = false;
+                Toast.makeText(MainActivity.this, "タイマーを停止しました", Toast.LENGTH_LONG).show();
+            }
+        }
         return super.onOptionsItemSelected(item);
     }
 
-    // MediaPlayerの割込処理
+    /**
+     * 曲再生が末端に達した時の割り込み Called when the end of a media source is reached during playback
+     * @see android.media.MediaPlayer.OnCompletionListener#onCompletion(android.media.MediaPlayer)
+     * @param mp    対象となるMediaPlayer
+     */
     @Override
     public void onCompletion(MediaPlayer mp) {
         // メディアプレーヤーによる受信を停止し、接続を閉じる
@@ -409,7 +559,11 @@ OnErrorListener, OnInfoListener, Runnable {
         }
     }
 
-    // MediaPlayerの割込処理
+    /**
+     * MediaPlayerでエラーが発生した時の割り込み
+     * @see android.media.MediaPlayer.OnErrorListener#onError(android.media.MediaPlayer, int, int)
+     * @param mp        対象となるMediaPlayer
+     */
     @Override
     public boolean onError(MediaPlayer mp, int what, int extra) {
         // 経過時刻表示の無効化
@@ -421,7 +575,11 @@ OnErrorListener, OnInfoListener, Runnable {
         return false;
     }
 
-    // MediaPlayerの割込処理
+    /**
+     * MediaPlayerから警告等が発せられた場合の割込処理
+     * @see android.media.MediaPlayer.OnInfoListener#onInfo(android.media.MediaPlayer, int, int)
+     * @param mp        対象となるMediaPlayer
+     */
     @Override
     public boolean onInfo(MediaPlayer mp, int what, int extra) {
         if(what == MediaPlayer.MEDIA_INFO_BUFFERING_START){
@@ -436,7 +594,10 @@ OnErrorListener, OnInfoListener, Runnable {
         return false;
     }
 
-    // Activityが破棄される時（「戻るキー」でタスク自体は残っている場合も含む）
+    /**
+     * Activityが破棄される時（「戻るキー」でタスク自体は残っている場合も含む）
+     * @see android.support.v4.app.FragmentActivity#onDestroy()
+     */
     @Override
     protected void onDestroy() {
         // メディアプレーヤが演奏中の場合は停止する
